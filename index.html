@@ -1,0 +1,704 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SET Link</title>
+<meta name="theme-color" content="#0f766e">
+<style>
+:root{
+  --bg:#f4f6f5; --card:#ffffff; --ink:#15211e; --mute:#5b6b66; --line:#dde4e1;
+  --acc:#0f766e; --acc2:#14b8a6; --accInk:#ffffff; --warn:#b45309; --bad:#b91c1c; --ok:#15803d;
+  --mono:ui-monospace,SFMono-Regular,Consolas,"Courier New",monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0e1513; --card:#16201d; --ink:#e3ece9; --mute:#93a5a0; --line:#26332f;
+    --acc:#14b8a6; --acc2:#2dd4bf; --accInk:#04201c; --warn:#f59e0b; --bad:#f87171; --ok:#4ade80;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "Sarabun","Noto Sans Thai","Segoe UI",system-ui,sans-serif}
+header{background:var(--acc);color:var(--accInk);padding:14px 16px}
+header h1{margin:0;font-size:19px;letter-spacing:.2px}
+header p{margin:2px 0 0;font-size:13px;opacity:.9}
+.wrap{max-width:980px;margin:0 auto;padding:12px 16px 40px}
+.status{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:4px 0 12px}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:var(--card);border:1px solid var(--line);font-size:13px}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--bad)}
+.dot.on{background:var(--ok)}
+nav{display:flex;gap:6px;overflow-x:auto;margin-bottom:12px}
+nav button{flex:0 0 auto;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:8px 14px;border-radius:10px;font:inherit;cursor:pointer}
+nav button.act{background:var(--acc);color:var(--accInk);border-color:var(--acc)}
+section{display:none}
+section.act{display:block}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
+.card h2{margin:0 0 10px;font-size:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+label{display:block;font-size:13px;color:var(--mute)}
+select,input[type=number],input[type=text]{width:100%;margin-top:3px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit}
+textarea{width:100%;min-height:160px;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:13px/1.4 var(--mono);resize:vertical}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+.btn{border:0;background:var(--acc);color:var(--accInk);padding:9px 14px;border-radius:9px;font:inherit;font-weight:600;cursor:pointer}
+.btn.sec{background:transparent;color:var(--acc);border:1px solid var(--acc)}
+.btn.bad{background:var(--bad);color:#fff}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.check{display:flex;align-items:center;gap:6px;color:var(--ink);font-size:14px}
+pre.log{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;max-height:240px;overflow:auto;font:12px/1.4 var(--mono);white-space:pre-wrap;word-break:break-all;margin:0}
+.tblwrap{overflow:auto;max-height:340px;border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%;font:13px var(--mono)}
+th,td{padding:5px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th{position:sticky;top:0;background:var(--card);color:var(--mute);font-weight:600}
+td:first-child,th:first-child,td.l{text-align:left}
+.note{font-size:13px;color:var(--mute)}
+.warn{color:var(--warn)}
+.bar{height:8px;background:var(--line);border-radius:99px;overflow:hidden;flex:1;min-width:120px}
+.bar>i{display:block;height:100%;width:0;background:var(--acc2);transition:width .15s}
+ol,ul{padding-left:22px;margin:6px 0}
+li{margin:3px 0}
+code{font-family:var(--mono);background:var(--bg);padding:1px 5px;border-radius:5px;border:1px solid var(--line)}
+.kv{font:13px var(--mono)}
+</style>
+</head>
+<body>
+<header>
+  <h1>SET Link — รับ/ส่งข้อมูลกล้อง Sokkia SET</h1>
+  <p>สำหรับ SET630RK และรุ่น Series 30R · ใช้กับ Chrome / Edge บน Windows 11 หรือ Chrome บน Android</p>
+</header>
+<div class="wrap">
+  <div class="status">
+    <span class="chip"><span id="dot" class="dot"></span><span id="connText">ยังไม่เชื่อมต่อ</span></span>
+    <span class="chip">รับ <b id="rxCount">0</b> ไบต์</span>
+    <span class="chip">ส่ง <b id="txCount">0</b> ไบต์</span>
+    <span class="chip" id="flowChip" hidden>⏸ กล้องสั่งหยุดชั่วคราว (XOFF)</span>
+  </div>
+
+  <nav>
+    <button data-tab="conn" class="act">1. เชื่อมต่อ</button>
+    <button data-tab="rx">2. รับข้อมูลจากกล้อง</button>
+    <button data-tab="tx">3. ส่งพิกัดเข้ากล้อง</button>
+    <button data-tab="help">วิธีใช้ / แก้ปัญหา</button>
+  </nav>
+
+  <!-- CONNECT -->
+  <section id="tab-conn" class="act">
+    <div class="card">
+      <h2>ตั้งค่าการสื่อสาร (ต้องตรงกับในกล้อง)</h2>
+      <div class="grid">
+        <label>Baud rate
+          <select id="baud">
+            <option>1200</option><option>2400</option><option>4800</option>
+            <option>9600</option><option>19200</option><option>38400</option>
+          </select>
+        </label>
+        <label>Data bits
+          <select id="dataBits"><option value="8">8 bit</option><option value="7">7 bit</option></select>
+        </label>
+        <label>Parity
+          <select id="parity"><option value="none">Not set (ไม่มี)</option><option value="even">Even</option><option value="odd">Odd</option></select>
+        </label>
+        <label>Stop bit
+          <select id="stopBits"><option value="1">1 bit</option><option value="2">2 bit</option></select>
+        </label>
+        <label>Xon/Xoff
+          <select id="xon"><option value="1">Yes</option><option value="0">No</option></select>
+        </label>
+      </div>
+      <p class="note">ดูค่าในกล้องที่ <b>CNFG → Comms setup</b> แล้วตั้งให้ตรงกันทุกช่อง · <b>Check sum ในกล้องให้ตั้งเป็น No</b></p>
+    </div>
+
+    <div class="card">
+      <h2>เลือกวิธีเชื่อมต่อ</h2>
+      <div class="row" style="margin-top:0">
+        <button class="btn" id="btnUsb">🔌 USB โดยตรง (ไม่ต้องใช้ COM port)</button>
+        <button class="btn sec" id="btnSerial">COM port (Web Serial)</button>
+        <button class="btn bad" id="btnDisc" disabled>ตัดการเชื่อมต่อ</button>
+      </div>
+      <p class="note" style="margin-top:10px">
+        <b>USB โดยตรง</b> — มีไดรเวอร์ในตัวสำหรับชิป Prolific PL2303, CH340/CH341, FTDI และ CP210x ใช้ได้แม้ Windows 11 ขึ้นว่าไดรเวอร์ไม่รองรับ
+        (บน Windows ต้องเปลี่ยนไดรเวอร์สายเป็น WinUSB ด้วย Zadig ครั้งเดียว · บน Android เสียบผ่าน OTG ใช้ได้เลย) ดูขั้นตอนในแท็บ “วิธีใช้”<br>
+        <b>COM port</b> — ใช้เมื่อสายขึ้นเป็น COM ใน Device Manager ได้ปกติ
+      </p>
+      <p class="note" id="support"></p>
+    </div>
+
+    <div class="card">
+      <h2>บันทึกการทำงาน</h2>
+      <pre class="log" id="sysLog"></pre>
+    </div>
+  </section>
+
+  <!-- RECEIVE -->
+  <section id="tab-rx">
+    <div class="card">
+      <h2>รับงาน (JOB) จากกล้อง</h2>
+      <ol class="note">
+        <li>เชื่อมต่อในแท็บ 1 ให้เรียบร้อย แล้วกด <b>เริ่มรับข้อมูล</b></li>
+        <li>ที่กล้อง: <b>MEM → JOB → Comms output</b> → เลือก JOB ให้ขึ้น “Out” → <b>OK</b> → เลือก <b>SDR33</b></li>
+        <li>ส่งเสร็จ ข้อมูลจะถูกแปลงเป็นตารางอัตโนมัติ แล้วบันทึกเป็นไฟล์ได้ด้านล่าง</li>
+      </ol>
+      <div class="row">
+        <button class="btn" id="btnRxStart" disabled>▶ เริ่มรับข้อมูล</button>
+        <button class="btn sec" id="btnRxStop" disabled>■ หยุดรับ</button>
+        <button class="btn sec" id="btnRxClear">ล้างข้อมูล</button>
+        <label class="btn sec" style="display:inline-block;color:var(--acc)">เปิดไฟล์ .sdr เดิม<input type="file" id="rxFile" accept=".sdr,.txt,.raw" hidden></label>
+      </div>
+      <p class="note" id="rxState" style="margin:8px 0 0"></p>
+    </div>
+
+    <div class="card">
+      <h2>ข้อมูลดิบที่ได้รับ</h2>
+      <pre class="log" id="rxRaw"></pre>
+    </div>
+
+    <div class="card">
+      <h2>ผลการแปลง</h2>
+      <div class="grid">
+        <label>ลำดับพิกัดในไฟล์
+          <select id="rxOrder"><option value="NEZ">N - E - Z (ค่าโรงงาน)</option><option value="ENZ">E - N - Z</option></select>
+        </label>
+      </div>
+      <p class="kv" id="rxSummary"></p>
+      <div class="tblwrap"><table id="ptTable"><thead><tr><th>จุด</th><th>N</th><th>E</th><th>Z</th><th class="l">Code</th><th class="l">ชนิด</th></tr></thead><tbody></tbody></table></div>
+      <div id="obsWrap" hidden>
+        <h2 style="margin-top:14px">ค่าวัดดิบ (มุม/ระยะ)</h2>
+        <div class="tblwrap"><table id="obsTable"><thead><tr><th>จาก</th><th>ไป</th><th>ระยะเอียง</th><th>มุมดิ่ง</th><th>มุมราบ</th><th class="l">Code</th></tr></thead><tbody></tbody></table></div>
+      </div>
+      <div class="row">
+        <button class="btn" data-exp="sdr">บันทึก .sdr (ไฟล์ดิบ)</button>
+        <button class="btn sec" data-exp="csv">CSV (จุด,N,E,Z,Code)</button>
+        <button class="btn sec" data-exp="csvcad">CSV สำหรับ CAD (E,N,Z)</button>
+        <button class="btn sec" data-exp="dxf">DXF (จุด + เลขจุด)</button>
+        <button class="btn sec" data-exp="obs">CSV ค่าวัดดิบ</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- SEND -->
+  <section id="tab-tx">
+    <div class="card">
+      <h2>1) ใส่พิกัดที่จะส่ง</h2>
+      <p class="note" style="margin-top:0">วางข้อมูลจาก Excel/CSV ได้เลย คั่นด้วย , หรือ Tab หรือเว้นวรรค · หนึ่งบรรทัดต่อหนึ่งจุด · ถ้ามีหัวตารางจะข้ามให้อัตโนมัติ</p>
+      <textarea id="txInput" placeholder="BM1,1543210.123,671234.567,5.250,BM&#10;P1,1543220.000,671240.000,5.100&#10;P2,1543230.500,671250.250,5.050"></textarea>
+      <div class="grid" style="margin-top:10px">
+        <label>ลำดับคอลัมน์ที่วาง
+          <select id="txCols">
+            <option value="PNEZC">จุด, N, E, Z, Code</option>
+            <option value="PENZC">จุด, E, N, Z, Code</option>
+          </select>
+        </label>
+        <label>รูปแบบที่ส่ง
+          <select id="txFmt">
+            <option value="SDR33">SDR33 (ชื่อจุดได้ 14 ตัวอักษร)</option>
+            <option value="SDR2x">SDR2x (เลขจุด 4 หลัก)</option>
+          </select>
+        </label>
+        <label>ลำดับพิกัดในกล้อง
+          <select id="txOrder"><option value="NEZ">N - E - Z (ค่าโรงงาน)</option><option value="ENZ">E - N - Z</option></select>
+        </label>
+        <label>หน่วงต่อบรรทัด (ms)
+          <input type="number" id="txDelay" value="60" min="0" max="2000">
+        </label>
+      </div>
+      <div class="row">
+        <label class="check"><input type="checkbox" id="txHeader"> ใส่บรรทัดหัวไฟล์ 00NM</label>
+        <label class="btn sec" style="display:inline-block;color:var(--acc)">เปิดไฟล์ CSV/TXT<input type="file" id="txFile" accept=".csv,.txt" hidden></label>
+        <button class="btn" id="btnBuild">สร้างข้อมูลสำหรับส่ง ↓</button>
+      </div>
+      <p class="note warn" id="txWarn"></p>
+    </div>
+
+    <div class="card">
+      <h2>2) ข้อมูลที่จะส่งเข้ากล้อง (แก้ไขได้)</h2>
+      <p class="note" style="margin-top:0">มีไฟล์ .sdr อยู่แล้ว? เปิดใส่ช่องนี้แล้วส่งได้ทันที
+        <label class="btn sec" style="display:inline-block;color:var(--acc);padding:4px 10px;margin-left:6px">เปิด .sdr<input type="file" id="txRawFile" accept=".sdr,.txt" hidden></label>
+      </p>
+      <textarea id="txOut" spellcheck="false"></textarea>
+      <ol class="note">
+        <li>ที่กล้อง: <b>MEM → Known data → Comms input</b> (กล้องจะรอรับและนับจำนวนที่ได้)</li>
+        <li>กด <b>ส่งเข้ากล้อง</b> ด้านล่าง</li>
+      </ol>
+      <div class="row">
+        <button class="btn" id="btnSend" disabled>📤 ส่งเข้ากล้อง</button>
+        <button class="btn bad" id="btnSendStop" disabled>หยุด</button>
+        <div class="bar"><i id="txBar"></i></div>
+        <span class="note" id="txProg"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- HELP -->
+  <section id="tab-help">
+    <div class="card">
+      <h2>ทำไมสายเดิมใช้กับ Windows 11 ไม่ได้</h2>
+      <p>สายแปลง USB→RS-232 ที่ขายคู่กล้องส่วนใหญ่ใช้ชิป <b>Prolific PL2303 รุ่นเก่า (HXA/XA)</b> ซึ่ง Prolific เลิกทำไดรเวอร์ให้แล้ว
+        พอเสียบใน Windows 11 จะขึ้นเครื่องหมายตกใจ, <i>Code 10</i> หรือ <i>“PHASED OUT SINCE 2012”</i> ตัวสายไม่ได้เสีย แค่ไม่มีไดรเวอร์
+        เครื่องมือนี้จึงคุยกับชิปในสายโดยตรงแทนไดรเวอร์</p>
+      <p class="note">เช็กชิปของสาย: Device Manager → คลิกขวาที่สาย → Properties → Details → Hardware Ids
+        · <code>VID_067B</code> = Prolific · <code>VID_1A86</code> = CH340 · <code>VID_0403</code> = FTDI · <code>VID_10C4</code> = CP210x</p>
+    </div>
+
+    <div class="card">
+      <h2>วิธี A — คอม Windows 11 (แนะนำ)</h2>
+      <ol>
+        <li>ดาวน์โหลดโปรแกรม <b>Zadig</b> จาก <code>zadig.akeo.ie</code> (ไม่ต้องติดตั้ง)</li>
+        <li>เสียบสาย เปิด Zadig → เมนู <b>Options → List All Devices</b></li>
+        <li>เลือกรายการของสาย (เช่น “USB-Serial Controller” หรือที่มี USB ID <code>067B</code>)</li>
+        <li>ช่องขวาเลือก <b>WinUSB</b> → กด <b>Replace Driver</b> รอจนเสร็จ (ทำครั้งเดียว)</li>
+        <li>เปิดหน้านี้ด้วย <b>Chrome หรือ Edge</b> → แท็บ 1 → กด <b>USB โดยตรง</b> → เลือกสายในหน้าต่างที่เด้งขึ้น</li>
+      </ol>
+      <p class="note">หลังเปลี่ยนเป็น WinUSB สายนี้จะไม่ขึ้นเป็น COM port สำหรับโปรแกรมอื่น
+        ถ้าอยากเปลี่ยนกลับ: Device Manager → คลิกขวาที่สาย → Uninstall device → ติ๊ก “Delete the driver” → ถอดเสียบใหม่</p>
+    </div>
+
+    <div class="card">
+      <h2>วิธี B — มือถือ Android (ไม่ต้องลงไดรเวอร์เลย)</h2>
+      <ol>
+        <li>เสียบสายเข้ามือถือผ่านหัวแปลง <b>USB OTG</b></li>
+        <li>เปิดหน้านี้ด้วย <b>Chrome</b> (ต้องเป็นลิงก์ https เช่นอัปขึ้น Netlify)</li>
+        <li>แท็บ 1 → <b>USB โดยตรง</b> → อนุญาตการเข้าถึงอุปกรณ์</li>
+      </ol>
+    </div>
+
+    <div class="card">
+      <h2>ถ้ารับมาแล้วเป็นตัวอักษรเพี้ยน / ไม่มีอะไรเข้ามา</h2>
+      <ul>
+        <li>ตัวอักษรมั่ว ๆ = Baud rate ไม่ตรงกับในกล้อง ลองเปลี่ยนให้ตรง (ตัดการเชื่อมต่อแล้วต่อใหม่)</li>
+        <li>ไม่มีข้อมูลเลย = ตรวจหัวต่อสายกับกล้องให้แน่น, เปิด Check sum = No, ลองสลับ Xon/Xoff ทั้งสองฝั่งให้ตรงกัน</li>
+        <li>ส่งพิกัดแล้วกล้องนับได้ 0 จุด = ลองติ๊ก “ใส่บรรทัดหัวไฟล์” หรือเปลี่ยนเป็น SDR2x และเพิ่มค่าหน่วงต่อบรรทัด</li>
+        <li>หมายเหตุจากคู่มือกล้อง: จุด Known data ที่รับมาทางสาย จะไม่ถูกส่งออกตอนดาวน์โหลด JOB</li>
+      </ul>
+    </div>
+  </section>
+</div>
+
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+/* ---------- prefs ---------- */
+const PREF_IDS = ["baud","dataBits","parity","stopBits","xon","rxOrder","txCols","txFmt","txOrder","txDelay"];
+function loadPrefs(){ try{ const p = JSON.parse(localStorage.getItem("setlink") || "{}"); PREF_IDS.forEach(id => { if (p[id] != null) $("#"+id).value = p[id]; }); }catch(e){} }
+function savePrefs(){ try{ const p = {}; PREF_IDS.forEach(id => p[id] = $("#"+id).value); localStorage.setItem("setlink", JSON.stringify(p)); }catch(e){} }
+loadPrefs();
+PREF_IDS.forEach(id => $("#"+id).addEventListener("change", savePrefs));
+
+/* ---------- tabs ---------- */
+document.querySelectorAll("nav button").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll("nav button").forEach(x => x.classList.toggle("act", x === b));
+  document.querySelectorAll("section").forEach(s => s.classList.toggle("act", s.id === "tab-" + b.dataset.tab));
+}));
+
+/* ---------- log ---------- */
+function log(msg){
+  const t = new Date().toLocaleTimeString("th-TH");
+  const el = $("#sysLog"); el.textContent += `[${t}] ${msg}\n`; el.scrollTop = el.scrollHeight;
+}
+$("#support").textContent =
+  "เบราว์เซอร์นี้: USB โดยตรง " + ("usb" in navigator ? "✔ ใช้ได้" : "✘ ไม่รองรับ") +
+  " · COM port " + ("serial" in navigator ? "✔ ใช้ได้" : "✘ ไม่รองรับ") +
+  (window.isSecureContext ? "" : " · ⚠ ต้องเปิดผ่าน https หรือไฟล์ในเครื่อง");
+
+function opts(){
+  return { baud:+$("#baud").value, dataBits:+$("#dataBits").value, parity:$("#parity").value, stopBits:+$("#stopBits").value };
+}
+
+/* =========================================================
+   Web Serial (when a working COM driver exists)
+   ========================================================= */
+class WebSerialPort {
+  async open(o){
+    this.port = await navigator.serial.requestPort();
+    await this.port.open({ baudRate:o.baud, dataBits:o.dataBits, stopBits:o.stopBits, parity:o.parity, flowControl:"none", bufferSize:16384 });
+    this.name = "COM port";
+    this.closing = false;
+    this._loop();
+  }
+  async _loop(){
+    while (this.port.readable && !this.closing){
+      this.reader = this.port.readable.getReader();
+      try{
+        for(;;){ const { value, done } = await this.reader.read(); if (done) break; if (value && value.length) this.onData(value); }
+      }catch(e){ if (!this.closing) log("อ่านข้อมูลผิดพลาด: " + e.message); }
+      finally{ try{ this.reader.releaseLock(); }catch(e){} }
+    }
+  }
+  async write(bytes){ const w = this.port.writable.getWriter(); try{ await w.write(bytes); } finally{ w.releaseLock(); } }
+  async close(){ this.closing = true; try{ await this.reader?.cancel(); }catch(e){} try{ await this.port.close(); }catch(e){} }
+}
+
+/* =========================================================
+   WebUSB user-space drivers: PL2303 / CH34x / FTDI / CP210x
+   ========================================================= */
+function ch341Divisor(speed){
+  const CLK = 48000000, clkDiv = (ps, f) => 1 << (12 - 3*ps - f);
+  const minRate = ps => CLK / (clkDiv(ps,1) * 512);
+  let fact = 1, ps;
+  for (ps = 3; ps >= 0; ps--) if (speed > minRate(ps)) break;
+  if (ps < 0) throw new Error("baud ต่ำเกินไป");
+  let cd = clkDiv(ps, fact);
+  let div = Math.floor(CLK / (cd * speed));
+  if (div < 9 || div > 255){ div = Math.floor(div/2); cd *= 2; fact = 0; }
+  if (16*CLK/(cd*div) - 16*speed >= 16*speed - 16*CLK/(cd*(div+1))) div++;
+  if (fact === 1 && div % 2 === 0){ div /= 2; fact = 0; }
+  return ((0x100 - div) << 8) | (fact << 2) | ps;
+}
+function ftdiBaud(baud){
+  const div8 = Math.round(24000000 / baud);           // 3 MHz base, 1/8 steps
+  const fracCode = [0,3,2,4,1,5,6,7][div8 & 7];
+  const enc = (div8 >> 3) | (fracCode << 14);
+  return [enc & 0xFFFF, (enc >> 16) & 0xFFFF];
+}
+const PARITY = { none:0, odd:1, even:2 };
+
+class UsbSerial {
+  static FILTERS = [{vendorId:0x067B},{vendorId:0x1A86},{vendorId:0x0403},{vendorId:0x10C4}];
+  async open(o){
+    const d = this.dev = await navigator.usb.requestDevice({ filters: UsbSerial.FILTERS });
+    await d.open();
+    if (!d.configuration) await d.selectConfiguration(1);
+    const vid = d.vendorId;
+    this.chip = vid === 0x067B ? "PL2303" : vid === 0x1A86 ? "CH34x" : vid === 0x0403 ? "FTDI" : "CP210x";
+    let found = null;
+    for (const itf of d.configuration.interfaces){
+      const alt = itf.alternates[0];
+      const i = alt.endpoints.find(e => e.type === "bulk" && e.direction === "in");
+      const w = alt.endpoints.find(e => e.type === "bulk" && e.direction === "out");
+      if (i && w){ found = { itf, i, w }; break; }
+    }
+    if (!found) throw new Error("ไม่พบช่องรับส่งข้อมูล (bulk endpoint) ในอุปกรณ์นี้");
+    await d.claimInterface(found.itf.interfaceNumber);
+    this.ifn = found.itf.interfaceNumber;
+    this.epIn = found.i.endpointNumber; this.epOut = found.w.endpointNumber;
+    this.pkt = found.i.packetSize || 64;
+    this.ftdi = this.chip === "FTDI";
+    await this["init_" + this.chip](o);
+    this.name = `USB ${this.chip}` + (d.productName ? ` (${d.productName})` : "");
+    this.running = true;
+    this._loop();
+  }
+  co(type, rcpt, request, value, index, data){ return this.dev.controlTransferOut({ requestType:type, recipient:rcpt, request, value, index }, data); }
+  ci(type, rcpt, request, value, index, len){ return this.dev.controlTransferIn({ requestType:type, recipient:rcpt, request, value, index }, len); }
+
+  async init_PL2303(o){
+    const vr = v => this.ci("vendor","device",0x01,v,0,1).catch(()=>{});
+    const vw = (v,i) => this.co("vendor","device",0x01,v,i).catch(()=>{});
+    // Prolific HX/HXA vendor init sequence
+    await vr(0x8484); await vw(0x0404,0); await vr(0x8484); await vr(0x8383);
+    await vr(0x8484); await vw(0x0404,1); await vr(0x8484); await vr(0x8383);
+    await vw(0x0000,1); await vw(0x0001,0); await vw(0x0002,0x44);
+    const lc = new Uint8Array(7); const dv = new DataView(lc.buffer);
+    dv.setUint32(0, o.baud, true); lc[4] = o.stopBits === 2 ? 2 : 0; lc[5] = PARITY[o.parity]; lc[6] = o.dataBits;
+    await this.co("class","interface",0x20,0,0,lc);          // SET_LINE_CODING
+    await this.co("class","interface",0x22,0x03,0);          // DTR + RTS
+    await vw(0x0000,0x00);                                   // no hardware flow control
+  }
+  async init_CH34x(o){
+    let ver = 0;
+    try{ const r = await this.ci("vendor","device",0x5F,0,0,2); ver = r.data.getUint8(0); }catch(e){}
+    await this.co("vendor","device",0xA1,0,0);
+    let val = ch341Divisor(o.baud); if (ver > 0x27) val |= 0x80;
+    let lcr = 0xC0 | (o.dataBits === 7 ? 0x02 : 0x03);
+    if (o.parity !== "none") lcr |= 0x08 | (o.parity === "even" ? 0x10 : 0);
+    if (o.stopBits === 2) lcr |= 0x04;
+    await this.co("vendor","device",0x9A,0x1312,val);
+    await this.co("vendor","device",0x9A,0x2518,lcr);
+    await this.co("vendor","device",0xA4,0xFF9F,0);          // DTR + RTS on (active low)
+  }
+  async init_FTDI(o){
+    const w = (r,v,i=0) => this.co("vendor","device",r,v,i);
+    await w(0,0);                                             // reset
+    const [bv,bi] = ftdiBaud(o.baud); await w(3,bv,bi);
+    await w(4, o.dataBits | (PARITY[o.parity] << 8) | ((o.stopBits === 2 ? 2 : 0) << 11));
+    await w(2,0);                                             // no flow control
+    await w(1,0x0303);                                        // DTR + RTS
+    await w(9,16).catch(()=>{});                              // latency 16 ms
+  }
+  async init_CP210x(o){
+    const w = (r,v,data) => this.co("vendor","interface",r,v,this.ifn,data);
+    await w(0x00,1);                                          // IFC_ENABLE
+    const b = new Uint8Array(4); new DataView(b.buffer).setUint32(0,o.baud,true);
+    await w(0x1E,0,b);                                        // SET_BAUDRATE
+    await w(0x03, (o.stopBits === 2 ? 2 : 0) | (PARITY[o.parity] << 4) | (o.dataBits << 8));
+    await w(0x07,0x0303);                                     // DTR + RTS
+  }
+  async _loop(){
+    while (this.running){
+      try{
+        const r = await this.dev.transferIn(this.epIn, this.pkt * 4);
+        if (!r.data || !r.data.byteLength) continue;
+        let u = new Uint8Array(r.data.buffer, r.data.byteOffset, r.data.byteLength);
+        if (this.ftdi){                                       // strip 2 status bytes per packet
+          const parts = [];
+          for (let p = 0; p < u.length; p += this.pkt) parts.push(u.subarray(p + 2, Math.min(p + this.pkt, u.length)));
+          const n = parts.reduce((a,x) => a + x.length, 0); const out = new Uint8Array(n); let k = 0;
+          parts.forEach(x => { out.set(x,k); k += x.length; }); u = out;
+        } else u = u.slice();
+        if (u.length) this.onData(u);
+      }catch(e){
+        if (this.running){ log("การเชื่อมต่อ USB หลุด: " + e.message); this.running = false; onDisconnected(); }
+      }
+    }
+  }
+  async write(bytes){
+    for (let p = 0; p < bytes.length; p += this.pkt){
+      await this.dev.transferOut(this.epOut, bytes.subarray(p, p + this.pkt));
+    }
+  }
+  async close(){ this.running = false; try{ await this.dev.releaseInterface(this.ifn); }catch(e){} try{ await this.dev.close(); }catch(e){} }
+}
+
+/* =========================================================
+   Connection state + XON/XOFF
+   ========================================================= */
+let conn = null, rxTotal = 0, txTotal = 0, paused = false, receiving = false;
+let rxBuf = "", rxIdle = null;
+const dec = new TextDecoder("latin1");
+
+function setConnected(on){
+  $("#dot").classList.toggle("on", on);
+  $("#connText").textContent = on ? "เชื่อมต่อแล้ว: " + conn.name : "ยังไม่เชื่อมต่อ";
+  $("#btnDisc").disabled = !on;
+  $("#btnUsb").disabled = on; $("#btnSerial").disabled = on;
+  $("#btnRxStart").disabled = !on || receiving;
+  $("#btnSend").disabled = !on;
+}
+function onDisconnected(){ conn = null; receiving = false; $("#btnRxStop").disabled = true; setConnected(false); }
+
+function handleData(u){
+  rxTotal += u.length; $("#rxCount").textContent = rxTotal;
+  const useXon = $("#xon").value === "1";
+  let clean = u;
+  if (useXon){
+    const keep = [];
+    for (const b of u){
+      if (b === 0x13){ paused = true; continue; }
+      if (b === 0x11){ paused = false; continue; }
+      keep.push(b);
+    }
+    clean = Uint8Array.from(keep);
+    $("#flowChip").hidden = !paused;
+  }
+  if (!clean.length) return;
+  if (receiving){
+    rxBuf += dec.decode(clean);
+    const el = $("#rxRaw");
+    el.textContent = rxBuf.length > 60000 ? "…(แสดงเฉพาะส่วนท้าย)\n" + rxBuf.slice(-60000) : rxBuf;
+    el.scrollTop = el.scrollHeight;
+    $("#rxState").textContent = "กำลังรับข้อมูล… " + rxBuf.split(/\r?\n/).length + " บรรทัด";
+    clearTimeout(rxIdle);
+    rxIdle = setTimeout(() => { $("#rxState").textContent = "ข้อมูลหยุดเข้ามาแล้ว (ยังรอรับต่อได้) — แปลงผลแล้วด้านล่าง"; parseAndShow(); }, 2500);
+  }
+}
+
+async function connect(kind){
+  try{
+    const o = opts();
+    conn = kind === "usb" ? new UsbSerial() : new WebSerialPort();
+    conn.onData = handleData;
+    await conn.open(o);
+    paused = false;
+    log(`เชื่อมต่อ ${conn.name} @ ${o.baud} ${o.dataBits}${o.parity[0].toUpperCase()}${o.stopBits}`);
+    setConnected(true);
+  }catch(e){
+    conn = null; setConnected(false);
+    if (e.name === "NotFoundError") log("ไม่ได้เลือกอุปกรณ์ (หรือไม่พบสายที่รองรับ)");
+    else if (e.name === "SecurityError" || /Access denied|claim/i.test(e.message))
+      log("เข้าถึงสายไม่ได้: " + e.message + " → บน Windows ต้องเปลี่ยนไดรเวอร์สายเป็น WinUSB ด้วย Zadig ก่อน (ดูแท็บวิธีใช้)");
+    else log("เชื่อมต่อไม่สำเร็จ: " + e.message);
+  }
+}
+$("#btnUsb").onclick = () => { if (!("usb" in navigator)) return log("เบราว์เซอร์นี้ไม่รองรับ WebUSB — ใช้ Chrome หรือ Edge"); connect("usb"); };
+$("#btnSerial").onclick = () => { if (!("serial" in navigator)) return log("เบราว์เซอร์นี้ไม่รองรับ Web Serial — ใช้ Chrome หรือ Edge บนคอม"); connect("serial"); };
+$("#btnDisc").onclick = async () => { stopSend = true; if (conn) await conn.close(); log("ตัดการเชื่อมต่อแล้ว"); onDisconnected(); };
+if ("usb" in navigator) navigator.usb.addEventListener("disconnect", e => { if (conn && conn.dev === e.device){ log("ถอดสายออกแล้ว"); conn.running = false; onDisconnected(); } });
+
+async function writeText(s){
+  const bytes = new TextEncoder().encode(s);
+  await conn.write(bytes);
+  txTotal += bytes.length; $("#txCount").textContent = txTotal;
+}
+
+/* =========================================================
+   SDR parsing
+   ========================================================= */
+const num = s => { const t = (s || "").trim(); return t === "" ? NaN : Number(t); };
+function parseSDR(text, order){
+  const lines = text.split(/\r\n|\n|\r/).map(l => l.replace(/[\x00-\x1F\x7F]/g, "")).filter(l => l.length >= 4);
+  let fmt = "?";
+  for (const l of lines) if (l.startsWith("00")){ if (/SDR3/.test(l)) fmt = "SDR33"; else if (/SDR2/.test(l)) fmt = "SDR2x"; }
+  const pts = [], obs = []; let job = "";
+  for (const l of lines){
+    const rec = l.slice(0,2), der = l.slice(2,4);
+    const wide = fmt === "SDR33" || (fmt === "?" && l.length >= 58);
+    const IW = wide ? 16 : 4, CW = wide ? 16 : 10;
+    if (rec === "10"){ job = l.slice(4,20).trim(); continue; }
+    if (rec === "08" || rec === "02"){
+      let p = 4; const id = l.substr(p, IW).trim(); p += IW;
+      const a = num(l.substr(p,CW)); p += CW; const b = num(l.substr(p,CW)); p += CW; const c = num(l.substr(p,CW)); p += CW;
+      let ih = NaN; if (rec === "02"){ ih = num(l.substr(p,CW)); p += CW; }
+      const code = l.substr(p,16).trim();
+      if (isNaN(a) && isNaN(b)) continue;
+      const [n,e] = order === "ENZ" ? [b,a] : [a,b];
+      pts.push({ id, n, e, z:c, code, kind: (rec === "02" ? "ตั้งกล้อง " : "พิกัด ") + der, ih });
+    } else if (rec === "09"){
+      let p = 4; const from = l.substr(p,IW).trim(); p += IW; const to = l.substr(p,IW).trim(); p += IW;
+      const sd = num(l.substr(p,CW)); p += CW; const va = num(l.substr(p,CW)); p += CW; const ha = num(l.substr(p,CW)); p += CW;
+      const code = l.substr(p,16).trim();
+      obs.push({ from, to, sd, va, ha, code, kind: der });
+    }
+  }
+  return { fmt, job, lines: lines.length, pts, obs };
+}
+
+let lastParse = { pts:[], obs:[] };
+const f3 = v => isNaN(v) ? "" : v.toFixed(3);
+const f4 = v => isNaN(v) ? "" : String(v);
+const esc = s => String(s).replace(/[&<>]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;" }[c]));
+function parseAndShow(){
+  const r = lastParse = parseSDR(rxBuf, $("#rxOrder").value);
+  $("#rxSummary").textContent = rxBuf ? `รูปแบบ: ${r.fmt === "?" ? "ไม่พบหัวไฟล์ (เดาอัตโนมัติ)" : r.fmt}${r.job ? " · JOB: " + r.job : ""} · ${r.lines} บรรทัด · พิกัด ${r.pts.length} จุด · ค่าวัดดิบ ${r.obs.length} รายการ` : "";
+  $("#ptTable tbody").innerHTML = r.pts.map(p => `<tr><td>${esc(p.id)}</td><td>${f3(p.n)}</td><td>${f3(p.e)}</td><td>${f3(p.z)}</td><td class="l">${esc(p.code)}</td><td class="l">${p.kind}</td></tr>`).join("");
+  $("#obsWrap").hidden = !r.obs.length;
+  $("#obsTable tbody").innerHTML = r.obs.map(o => `<tr><td>${esc(o.from)}</td><td>${esc(o.to)}</td><td>${f4(o.sd)}</td><td>${f4(o.va)}</td><td>${f4(o.ha)}</td><td class="l">${esc(o.code)}</td></tr>`).join("");
+}
+$("#rxOrder").addEventListener("change", parseAndShow);
+
+$("#btnRxStart").onclick = () => {
+  receiving = true; $("#btnRxStart").disabled = true; $("#btnRxStop").disabled = false;
+  $("#rxState").textContent = "รอข้อมูลจากกล้อง… สั่ง MEM → JOB → Comms output ที่กล้องได้เลย";
+  log("เริ่มรอรับข้อมูล");
+};
+$("#btnRxStop").onclick = () => {
+  receiving = false; $("#btnRxStop").disabled = true; $("#btnRxStart").disabled = !conn;
+  clearTimeout(rxIdle); parseAndShow(); $("#rxState").textContent = "หยุดรับแล้ว"; log("หยุดรับข้อมูล");
+};
+$("#btnRxClear").onclick = () => { rxBuf = ""; $("#rxRaw").textContent = ""; $("#rxState").textContent = ""; parseAndShow(); };
+$("#rxFile").onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  rxBuf = dec.decode(new Uint8Array(await f.arrayBuffer()));
+  $("#rxRaw").textContent = rxBuf; parseAndShow(); log("เปิดไฟล์ " + f.name); e.target.value = "";
+};
+
+/* ---------- exports ---------- */
+function download(name, text, mime="text/plain"){
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], { type: mime + ";charset=utf-8" }));
+  a.download = name; document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+function stamp(){ const d = new Date(), p = n => String(n).padStart(2,"0"); return `${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`; }
+const csvCell = s => /[",\n]/.test(s) ? `"${String(s).replace(/"/g,'""')}"` : s;
+function makeDXF(pts){
+  const L = [];
+  const add = (...a) => L.push(...a.map(String));
+  add(0,"SECTION",2,"ENTITIES");
+  const ok = pts.filter(p => !isNaN(p.n) && !isNaN(p.e));
+  for (const p of ok){
+    const z = isNaN(p.z) ? 0 : p.z;
+    add(0,"POINT",8,"TS_POINT",10,p.e,20,p.n,30,z);
+    add(0,"TEXT",8,"TS_LABEL",10,p.e+0.2,20,p.n+0.2,30,z,40,0.25,1,p.id + (p.code ? " " + p.code : ""));
+  }
+  add(0,"ENDSEC",0,"EOF");
+  return L.join("\r\n");
+}
+document.querySelectorAll("[data-exp]").forEach(b => b.addEventListener("click", () => {
+  const k = b.dataset.exp, base = (lastParse.job || "JOB").replace(/[^\w-]+/g,"_") + "_" + stamp();
+  if (!rxBuf) return log("ยังไม่มีข้อมูลให้บันทึก");
+  if (k === "sdr") return download(base + ".sdr", rxBuf);
+  if (!lastParse.pts.length && k !== "obs") return log("ไม่พบข้อมูลพิกัดในไฟล์นี้");
+  if (k === "csv") return download(base + ".csv", "\uFEFFPoint,N,E,Z,Code\r\n" + lastParse.pts.map(p => [csvCell(p.id),f3(p.n),f3(p.e),f3(p.z),csvCell(p.code)].join(",")).join("\r\n"), "text/csv");
+  if (k === "csvcad") return download(base + "_ENZ.csv", lastParse.pts.map(p => [csvCell(p.id),f3(p.e),f3(p.n),f3(p.z),csvCell(p.code)].join(",")).join("\r\n"), "text/csv");
+  if (k === "dxf") return download(base + ".dxf", makeDXF(lastParse.pts), "application/dxf");
+  if (k === "obs"){
+    if (!lastParse.obs.length) return log("ไม่พบค่าวัดดิบในไฟล์นี้");
+    return download(base + "_obs.csv", "\uFEFFFrom,To,SlopeDist,VAngle,HAngle,Code\r\n" + lastParse.obs.map(o => [csvCell(o.from),csvCell(o.to),f4(o.sd),f4(o.va),f4(o.ha),csvCell(o.code)].join(",")).join("\r\n"), "text/csv");
+  }
+}));
+
+/* =========================================================
+   Build SDR known-point records for upload
+   ========================================================= */
+function fitNum(v, w){
+  if (isNaN(v)) return "".padEnd(w);
+  let d = 6, s = v.toFixed(d);
+  while (s.length >= w && d > 3) s = v.toFixed(--d);   // keep at least one space between fields
+  while (s.length > w && d > 0) s = v.toFixed(--d);
+  if (s.length > w) throw new Error("ค่าพิกัดยาวเกินช่อง: " + v);
+  return s.padEnd(w);
+}
+function parseCoordText(text, cols){
+  const out = [], bad = [];
+  text.split(/\r\n|\n|\r/).forEach((line, i) => {
+    const t = line.trim(); if (!t) return;
+    const f = (t.includes(",") ? t.split(",") : t.includes("\t") ? t.split("\t") : t.split(/\s+/)).map(s => s.trim().replace(/^"|"$/g,""));
+    const [id, c1, c2, c3, ...rest] = f;
+    const a = Number(c1), b = Number(c2), z = c3 === undefined || c3 === "" ? NaN : Number(c3);
+    if (!id || isNaN(a) || isNaN(b) || (c3 !== undefined && c3 !== "" && isNaN(z))){ if (out.length || i > 0) bad.push(i+1); return; }
+    const [n, e] = cols === "PENZC" ? [b, a] : [a, b];
+    out.push({ id, n, e, z, code: rest.join(" ").trim() });
+  });
+  return { pts: out, bad };
+}
+function buildSDR(pts, fmt, order, header){
+  const wide = fmt === "SDR33", IW = wide ? 16 : 4, CW = wide ? 16 : 10;
+  const lines = [], warn = [];
+  if (header){
+    const d = new Date(), mon = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"][d.getMonth()];
+    const p = n => String(n).padStart(2,"0");
+    lines.push(`00NM${wide ? "SDR33 V04-04.02" : "SDR20 V03-05  "}`.padEnd(24) + `${p(d.getDate())}-${mon}-${String(d.getFullYear()).slice(2)} ${p(d.getHours())}:${p(d.getMinutes())} 111111`);
+  }
+  for (const pt of pts){
+    let id = pt.id.replace(/[^\x20-\x7E]/g, "");
+    if (id !== pt.id) warn.push(`จุด ${pt.id}: ตัดอักษรที่ไม่ใช่อังกฤษ/ตัวเลขออก`);
+    if (!wide && !/^\d{1,4}$/.test(id)) warn.push(`จุด ${id}: SDR2x ต้องเป็นเลข 1–4 หลัก`);
+    if (wide && id.length > 14){ warn.push(`จุด ${id}: ชื่อยาวเกิน 14 ตัว ตัดเหลือ 14`); id = id.slice(0,14); }
+    let code = pt.code.replace(/[^\x20-\x7E]/g, "").slice(0,16);
+    const [a, b] = order === "ENZ" ? [pt.e, pt.n] : [pt.n, pt.e];
+    lines.push("08KI" + id.padStart(IW).slice(-IW) + fitNum(a,CW) + fitNum(b,CW) + fitNum(pt.z,CW) + code.padEnd(16));
+  }
+  return { text: lines.map(l => l.replace(/\s+$/,"")).join("\r\n") + "\r\n", warn };
+}
+$("#btnBuild").onclick = () => {
+  try{
+    const { pts, bad } = parseCoordText($("#txInput").value, $("#txCols").value);
+    if (!pts.length){ $("#txWarn").textContent = "ไม่พบข้อมูลพิกัดที่อ่านได้"; return; }
+    const r = buildSDR(pts, $("#txFmt").value, $("#txOrder").value, $("#txHeader").checked);
+    $("#txOut").value = r.text;
+    const w = [...r.warn]; if (bad.length) w.unshift(`ข้ามบรรทัดที่อ่านไม่ได้: ${bad.slice(0,10).join(", ")}${bad.length > 10 ? "…" : ""}`);
+    $("#txWarn").textContent = `พร้อมส่ง ${pts.length} จุด` + (w.length ? " · " + w.slice(0,5).join(" · ") : "");
+  }catch(e){ $("#txWarn").textContent = e.message; }
+};
+$("#txFile").onchange = async e => { const f = e.target.files[0]; if (!f) return; $("#txInput").value = await f.text(); e.target.value = ""; $("#btnBuild").click(); };
+$("#txRawFile").onchange = async e => { const f = e.target.files[0]; if (!f) return; $("#txOut").value = dec.decode(new Uint8Array(await f.arrayBuffer())); e.target.value = ""; };
+
+let stopSend = false;
+$("#btnSendStop").onclick = () => { stopSend = true; };
+$("#btnSend").onclick = async () => {
+  if (!conn) return;
+  const lines = $("#txOut").value.split(/\r\n|\n|\r/).filter(l => l.length);
+  if (!lines.length) return log("ช่องข้อมูลที่จะส่งว่างอยู่");
+  const nonAscii = lines.some(l => /[^\x20-\x7E]/.test(l));
+  if (nonAscii && !confirm("มีตัวอักษรที่ไม่ใช่อังกฤษ/ตัวเลข กล้องอาจอ่านไม่ได้ ส่งต่อหรือไม่?")) return;
+  const delay = Math.max(0, +$("#txDelay").value || 0);
+  stopSend = false; paused = false;
+  $("#btnSend").disabled = true; $("#btnSendStop").disabled = false;
+  log(`เริ่มส่ง ${lines.length} บรรทัด`);
+  try{
+    for (let i = 0; i < lines.length; i++){
+      let waited = 0;
+      while (paused && !stopSend){ await sleep(20); if ((waited += 20) > 30000){ paused = false; log("รอ XON นานเกิน 30 วินาที ส่งต่อ"); } }
+      if (stopSend){ log("หยุดส่งกลางคัน"); break; }
+      await writeText(lines[i] + "\r\n");
+      $("#txBar").style.width = ((i+1) / lines.length * 100).toFixed(1) + "%";
+      $("#txProg").textContent = `${i+1}/${lines.length}`;
+      if (delay) await sleep(delay);
+    }
+    if (!stopSend) log("ส่งครบแล้ว — ตรวจจำนวนจุดที่หน้าจอกล้อง แล้วกด ESC ที่กล้องเพื่อจบการรับ");
+  }catch(e){ log("ส่งไม่สำเร็จ: " + e.message); }
+  $("#btnSend").disabled = !conn; $("#btnSendStop").disabled = true;
+};
+</script>
+</body>
+</html>
