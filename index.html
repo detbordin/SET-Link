@@ -202,11 +202,14 @@ code{font-family:var(--mono);background:var(--bg);padding:1px 5px;border-radius:
         <label>ท้ายบรรทัด
           <select id="txEol"><option value="crlf">CR+LF (ปกติ)</option><option value="cr">CR อย่างเดียว</option></select>
         </label>
+        <label>สัญญาณจบการส่ง
+          <select id="txEnd"><option value="1a">Ctrl-Z (1A)</option><option value="04">EOT (04)</option><option value="03">ETX (03)</option><option value="">ไม่ส่ง</option></select>
+        </label>
       </div>
       <div class="row">
         <label class="check"><input type="checkbox" id="txHeader"> ใส่บรรทัดหัวไฟล์ 00NM</label>
         <label class="check"><input type="checkbox" id="txTrim"> ตัดช่องว่างท้ายบรรทัด</label>
-        <label class="check"><input type="checkbox" id="txEof"> ส่ง EOF (Ctrl-Z) ตอนจบ</label>
+
         <label class="btn sec" style="display:inline-block;color:var(--acc)">เปิดไฟล์ CSV/TXT<input type="file" id="txFile" accept=".csv,.txt" hidden></label>
         <button class="btn" id="btnBuild">สร้างข้อมูลสำหรับส่ง ↓</button>
       </div>
@@ -226,6 +229,7 @@ code{font-family:var(--mono);background:var(--bg);padding:1px 5px;border-radius:
       <div class="row">
         <button class="btn" id="btnSend" disabled>📤 ส่งเข้ากล้อง</button>
         <button class="btn bad" id="btnSendStop" disabled>หยุด</button>
+        <button class="btn sec" id="btnEnd" disabled title="ใช้เมื่อกล้องรับครบแล้วแต่ยังค้างหน้า Receiving">ส่งสัญญาณจบ</button>
         <div class="bar"><i id="txBar"></i></div>
         <span class="note" id="txProg"></span>
       </div>
@@ -283,7 +287,7 @@ const $ = s => document.querySelector(s);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 /* ---------- prefs ---------- */
-const PREF_IDS = ["baud","dataBits","parity","stopBits","xon","rxOrder","txCols","txFmt","txOrder","txDelay","txEol"];
+const PREF_IDS = ["baud","dataBits","parity","stopBits","xon","rxOrder","txCols","txFmt","txOrder","txDelay","txEol","txEnd"];
 function loadPrefs(){ try{ const p = JSON.parse(localStorage.getItem("setlink") || "{}"); PREF_IDS.forEach(id => { if (p[id] != null) $("#"+id).value = p[id]; }); }catch(e){} }
 function savePrefs(){ try{ const p = {}; PREF_IDS.forEach(id => p[id] = $("#"+id).value); localStorage.setItem("setlink", JSON.stringify(p)); }catch(e){} }
 loadPrefs();
@@ -467,7 +471,7 @@ function setConnected(on){
   $("#btnDisc").disabled = !on;
   $("#btnUsb").disabled = on; $("#btnSerial").disabled = on;
   $("#btnRxStart").disabled = !on || receiving;
-  $("#btnSend").disabled = !on;
+  $("#btnSend").disabled = !on; $("#btnEnd").disabled = !on;
 }
 function onDisconnected(){ conn = null; receiving = false; $("#btnRxStop").disabled = true; setConnected(false); }
 
@@ -683,6 +687,12 @@ $("#btnBuild").onclick = () => {
 $("#txFile").onchange = async e => { const f = e.target.files[0]; if (!f) return; $("#txInput").value = await f.text(); e.target.value = ""; $("#btnBuild").click(); };
 $("#txRawFile").onchange = async e => { const f = e.target.files[0]; if (!f) return; $("#txOut").value = dec.decode(new Uint8Array(await f.arrayBuffer())); e.target.value = ""; };
 
+async function sendEnd(){
+  const v = $("#txEnd").value; if (!v || !conn) return;
+  await sleep(150); await writeText(String.fromCharCode(parseInt(v,16)));
+  log("ส่งสัญญาณจบการส่ง (" + v.toUpperCase() + ")");
+}
+$("#btnEnd").onclick = () => sendEnd().catch(e => log("ส่งไม่สำเร็จ: " + e.message));
 let stopSend = false;
 $("#btnSendStop").onclick = () => { stopSend = true; };
 $("#btnSend").onclick = async () => {
@@ -706,8 +716,8 @@ $("#btnSend").onclick = async () => {
       $("#txProg").textContent = `${i+1}/${lines.length}`;
       if (delay) await sleep(delay);
     }
-    if (!stopSend && $("#txEof").checked) await writeText("\x1A");
-    if (!stopSend) log("ส่งครบแล้ว — ตรวจจำนวนจุดที่หน้าจอกล้อง แล้วกด ESC ที่กล้องเพื่อจบการรับ");
+    if (!stopSend) await sendEnd();
+    if (!stopSend) log("ส่งครบแล้ว — กล้องควรร้องปี๊บแล้วกลับหน้า Known data เอง ถ้ายังค้าง ลองเปลี่ยน “สัญญาณจบการส่ง” แล้วกดปุ่ม ส่งสัญญาณจบ (อย่ากด ESC ที่กล้อง)");
   }catch(e){ log("ส่งไม่สำเร็จ: " + e.message); }
   $("#btnSend").disabled = !conn; $("#btnSendStop").disabled = true;
 };
