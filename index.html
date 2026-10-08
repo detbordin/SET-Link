@@ -202,6 +202,9 @@ code{font-family:var(--mono);background:var(--bg);padding:1px 5px;border-radius:
         <label>ท้ายบรรทัด
           <select id="txEol"><option value="crlf">CR+LF (ปกติ)</option><option value="cr">CR อย่างเดียว</option></select>
         </label>
+        <label>ทศนิยมพิกัด
+          <select id="txDec"><option value="3">3 ตำแหน่ง</option><option value="4">4 ตำแหน่ง</option><option value="auto">มากที่สุดที่ใส่ได้</option></select>
+        </label>
         <label>สัญญาณจบการส่ง
           <select id="txEnd"><option value="1a">Ctrl-Z (1A)</option><option value="04">EOT (04)</option><option value="03">ETX (03)</option><option value="">ไม่ส่ง</option></select>
         </label>
@@ -288,7 +291,7 @@ const $ = s => document.querySelector(s);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 /* ---------- prefs ---------- */
-const PREF_IDS = ["baud","dataBits","parity","stopBits","xon","rxOrder","txCols","txFmt","txOrder","txDelay","txEol","txEnd"];
+const PREF_IDS = ["baud","dataBits","parity","stopBits","xon","rxOrder","txCols","txFmt","txOrder","txDelay","txEol","txEnd","txDec"];
 function loadPrefs(){ try{ const p = JSON.parse(localStorage.getItem("setlink") || "{}"); PREF_IDS.forEach(id => { if (p[id] != null) $("#"+id).value = p[id]; }); }catch(e){} }
 function savePrefs(){ try{ const p = {}; PREF_IDS.forEach(id => p[id] = $("#"+id).value); localStorage.setItem("setlink", JSON.stringify(p)); }catch(e){} }
 loadPrefs();
@@ -642,8 +645,13 @@ document.querySelectorAll("[data-exp]").forEach(b => b.addEventListener("click",
 /* =========================================================
    Build SDR known-point records for upload
    ========================================================= */
-function fitNum(v, w){
+function fitNum(v, w, dec){
   if (isNaN(v)) return "".padEnd(w);
+  if (dec !== undefined && dec !== "auto"){
+    const s = v.toFixed(+dec);
+    if (s.length >= w) throw new Error("ค่าพิกัดยาวเกินช่อง " + (w-1) + " ตัวอักษร: " + s + " (ลองใช้รูปแบบ SDR33)");
+    return s.padEnd(w);
+  }
   let d = 6, s = v.toFixed(d);
   while (s.length >= w && d > 3) s = v.toFixed(--d);   // keep at least one space between fields
   while (s.length > w && d > 0) s = v.toFixed(--d);
@@ -663,7 +671,7 @@ function parseCoordText(text, cols){
   });
   return { pts: out, bad };
 }
-function buildSDR(pts, fmt, order, header, trim){
+function buildSDR(pts, fmt, order, header, trim, dec){
   const wide = fmt === "SDR33", IW = wide ? 16 : 4, CW = wide ? 16 : 10;
   const lines = [], warn = [];
   if (header){
@@ -678,7 +686,7 @@ function buildSDR(pts, fmt, order, header, trim){
     if (wide && id.length > 14){ warn.push(`จุด ${id}: ชื่อยาวเกิน 14 ตัว ตัดเหลือ 14`); id = id.slice(0,14); }
     let code = pt.code.replace(/[^\x20-\x7E]/g, "").slice(0,16);
     const [a, b] = order === "ENZ" ? [pt.e, pt.n] : [pt.n, pt.e];
-    lines.push("08KI" + id.padStart(IW).slice(-IW) + fitNum(a,CW) + fitNum(b,CW) + fitNum(pt.z,CW) + code.padEnd(16));
+    lines.push("08KI" + id.padStart(IW).slice(-IW) + fitNum(a,CW,dec) + fitNum(b,CW,dec) + fitNum(pt.z,CW,dec) + code.padEnd(16));
   }
   return { text: lines.map(l => trim ? l.replace(/\s+$/,"") : l).join("\r\n") + "\r\n", warn };
 }
@@ -686,7 +694,7 @@ $("#btnBuild").onclick = () => {
   try{
     const { pts, bad } = parseCoordText($("#txInput").value, $("#txCols").value);
     if (!pts.length){ $("#txWarn").textContent = "ไม่พบข้อมูลพิกัดที่อ่านได้"; return; }
-    const r = buildSDR(pts, $("#txFmt").value, $("#txOrder").value, $("#txHeader").checked, $("#txTrim").checked);
+    const r = buildSDR(pts, $("#txFmt").value, $("#txOrder").value, $("#txHeader").checked, $("#txTrim").checked, $("#txDec").value);
     $("#txOut").value = r.text;
     const w = [...r.warn]; if (bad.length) w.unshift(`ข้ามบรรทัดที่อ่านไม่ได้: ${bad.slice(0,10).join(", ")}${bad.length > 10 ? "…" : ""}`);
     $("#txWarn").textContent = `พร้อมส่ง ${pts.length} จุด` + (w.length ? " · " + w.slice(0,5).join(" · ") : "");
