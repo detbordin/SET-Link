@@ -230,6 +230,7 @@ code{font-family:var(--mono);background:var(--bg);padding:1px 5px;border-radius:
         <button class="btn" id="btnSend" disabled>📤 ส่งเข้ากล้อง</button>
         <button class="btn bad" id="btnSendStop" disabled>หยุด</button>
         <button class="btn sec" id="btnEnd" disabled title="ใช้เมื่อกล้องรับครบแล้วแต่ยังค้างหน้า Receiving">ส่งสัญญาณจบ</button>
+        <button class="btn sec" id="btnDrop" disabled title="ปิดสัญญาณ DTR/RTS ของสาย 2 วินาที แล้วเปิดใหม่">ปิด-เปิดสัญญาณสาย</button>
         <div class="bar"><i id="txBar"></i></div>
         <span class="note" id="txProg"></span>
       </div>
@@ -333,6 +334,7 @@ class WebSerialPort {
       finally{ try{ this.reader.releaseLock(); }catch(e){} }
     }
   }
+  async setSignals(on){ await this.port.setSignals({ dataTerminalReady:on, requestToSend:on }); }
   async write(bytes){ const w = this.port.writable.getWriter(); try{ await w.write(bytes); } finally{ w.releaseLock(); } }
   async close(){ this.closing = true; try{ await this.reader?.cancel(); }catch(e){} try{ await this.port.close(); }catch(e){} }
 }
@@ -450,6 +452,12 @@ class UsbSerial {
       }
     }
   }
+  async setSignals(on){
+    if (this.chip === "PL2303") await this.co("class","interface",0x22,on?3:0,0);
+    else if (this.chip === "CH34x") await this.co("vendor","device",0xA4,on?0xFF9F:0xFFFF,0);
+    else if (this.chip === "FTDI") await this.co("vendor","device",1,on?0x0303:0x0300,0);
+    else await this.co("vendor","interface",0x07,on?0x0303:0x0300,this.ifn);
+  }
   async write(bytes){
     for (let p = 0; p < bytes.length; p += this.pkt){
       await this.dev.transferOut(this.epOut, bytes.subarray(p, p + this.pkt));
@@ -471,7 +479,7 @@ function setConnected(on){
   $("#btnDisc").disabled = !on;
   $("#btnUsb").disabled = on; $("#btnSerial").disabled = on;
   $("#btnRxStart").disabled = !on || receiving;
-  $("#btnSend").disabled = !on; $("#btnEnd").disabled = !on;
+  $("#btnSend").disabled = !on; $("#btnEnd").disabled = !on; $("#btnDrop").disabled = !on;
 }
 function onDisconnected(){ conn = null; receiving = false; $("#btnRxStop").disabled = true; setConnected(false); }
 
@@ -692,6 +700,10 @@ async function sendEnd(){
   await sleep(150); await writeText(String.fromCharCode(parseInt(v,16)));
   log("ส่งสัญญาณจบการส่ง (" + v.toUpperCase() + ")");
 }
+$("#btnDrop").onclick = async () => {
+  try{ await conn.setSignals(false); log("ปิดสัญญาณ DTR/RTS แล้ว — ดูหน้าจอกล้อง"); await sleep(2000); await conn.setSignals(true); log("เปิดสัญญาณ DTR/RTS กลับแล้ว"); }
+  catch(e){ log("สั่งสัญญาณสายไม่ได้: " + e.message); }
+};
 $("#btnEnd").onclick = () => sendEnd().catch(e => log("ส่งไม่สำเร็จ: " + e.message));
 let stopSend = false;
 $("#btnSendStop").onclick = () => { stopSend = true; };
