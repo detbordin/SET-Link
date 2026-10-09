@@ -3,6 +3,7 @@
 เว็บแอปรับ/ส่งข้อมูลกับกล้อง Sokkia SET630RK (Series 30R) ผ่านสาย USB-RS232 โดยไม่ต้องใช้ไดรเวอร์ COM port ที่ Windows 11 ไม่รองรับ
 
 ## ความสามารถ
+- แปลงไฟล์ CSV เป็น DXF ได้เลยโดยไม่ต้องต่อกล้อง (แท็บ CSV → DXF)
 - รับ JOB จากกล้อง (SDR33/SDR2x) → ตารางจุด, บันทึกเป็น .sdr / CSV / CSV สำหรับ CAD / DXF
 - ส่งพิกัด Known data เข้ากล้องจากข้อมูล Excel/CSV
 - ไดรเวอร์ในตัว (WebUSB) สำหรับชิป Prolific PL2303, CH340/CH341, FTDI, CP210x

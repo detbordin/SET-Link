@@ -77,6 +77,7 @@ code{font-family:var(--mono);background:var(--bg);padding:1px 5px;border-radius:
     <button data-tab="conn" class="act">1. เชื่อมต่อ</button>
     <button data-tab="rx">2. รับข้อมูลจากกล้อง</button>
     <button data-tab="tx">3. ส่งพิกัดเข้ากล้อง</button>
+    <button data-tab="dxf">CSV → DXF</button>
     <button data-tab="help">วิธีใช้ / แก้ปัญหา</button>
   </nav>
 
@@ -236,6 +237,49 @@ code{font-family:var(--mono);background:var(--bg);padding:1px 5px;border-radius:
         <button class="btn sec" id="btnDrop" disabled title="ปิดสัญญาณ DTR/RTS ของสาย 2 วินาที แล้วเปิดใหม่">ปิด-เปิดสัญญาณสาย</button>
         <div class="bar"><i id="txBar"></i></div>
         <span class="note" id="txProg"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- CSV -> DXF (no instrument needed) -->
+  <section id="tab-dxf">
+    <div class="card">
+      <h2>แปลงไฟล์ CSV เป็น DXF</h2>
+      <p class="note" style="margin-top:0">ใช้ได้เลยโดยไม่ต้องต่อกล้อง · เปิดไฟล์ .csv / .txt หรือวางข้อมูลจาก Excel · หนึ่งบรรทัดต่อหนึ่งจุด · ถ้ามีหัวตารางจะข้ามให้อัตโนมัติ</p>
+      <div class="row" style="margin-top:0">
+        <label class="btn" style="display:inline-block;color:var(--accInk)">เปิดไฟล์ CSV/TXT<input type="file" id="cvFile" accept=".csv,.txt" hidden></label>
+        <span class="note" id="cvName"></span>
+      </div>
+      <textarea id="cvInput" style="margin-top:10px" placeholder="P1,1520412.351,671205.122,4.215,BM&#10;P2,1520418.904,671211.538,4.082,CURB&#10;P3,1520425.117,671219.763,4.110,CURB"></textarea>
+      <div class="grid" style="margin-top:10px">
+        <label>ลำดับคอลัมน์
+          <select id="cvCols">
+            <option value="PNEZC">จุด, N, E, Z, Code</option>
+            <option value="PENZC">จุด, E, N, Z, Code</option>
+          </select>
+        </label>
+        <label>ความสูงตัวอักษร (ม.)
+          <input type="number" id="cvTh" value="0.25" min="0.01" step="0.05">
+        </label>
+        <label>ระดับ Z ของจุด
+          <select id="cvZ"><option value="3d">ใช้ค่า Z จริง (3D)</option><option value="flat">วางที่ Z = 0 (2D)</option></select>
+        </label>
+        <label>ทศนิยมค่าระดับที่เขียน
+          <select id="cvDec"><option value="3">3</option><option value="2">2</option><option value="1">1</option></select>
+        </label>
+      </div>
+      <div class="row">
+        <label class="check"><input type="checkbox" id="cvId" checked> เขียนชื่อจุด</label>
+        <label class="check"><input type="checkbox" id="cvElev" checked> เขียนค่าระดับ</label>
+        <label class="check"><input type="checkbox" id="cvCode" checked> เขียน Code</label>
+        <label class="check"><input type="checkbox" id="cvLayer"> แยกเลเยอร์ตาม Code</label>
+        <label class="check"><input type="checkbox" id="cvCross" checked> วาดกากบาทที่จุด</label>
+      </div>
+      <p class="note warn" id="cvWarn"></p>
+      <svg id="cvPrev" viewBox="0 0 600 340" style="width:100%;max-height:340px;background:var(--bg);border:1px solid var(--line);border-radius:8px;display:block"></svg>
+      <div class="row">
+        <button class="btn" id="cvDxf">บันทึกเป็น DXF</button>
+        <button class="btn sec" id="cvToSend">ส่งต่อไปแท็บส่งพิกัดเข้ากล้อง</button>
       </div>
     </div>
   </section>
@@ -628,6 +672,69 @@ function makeDXF(pts){
   add(0,"ENDSEC",0,"EOF");
   return L.join("\r\n");
 }
+/* ---------- CSV -> DXF ---------- */
+function dxfFromPoints(pts, o){
+  const L = [], add = (...a) => L.push(...a.map(String));
+  const clean = s => String(s).replace(/[^A-Za-z0-9_\-$]/g, "_").slice(0, 31) || "0";
+  const ok = pts.filter(p => !isNaN(p.n) && !isNaN(p.e));
+  const layers = new Set(["TS_POINT","TS_ID","TS_ELEV","TS_CODE"]);
+  if (o.layerByCode) ok.forEach(p => layers.add(clean(p.code || "NOCODE")));
+  add(0,"SECTION",2,"HEADER",9,"$ACADVER",1,"AC1009",0,"ENDSEC");
+  add(0,"SECTION",2,"TABLES",0,"TABLE",2,"LAYER",70,layers.size);
+  const colors = { TS_POINT:7, TS_ID:3, TS_ELEV:1, TS_CODE:5 }; let ci = 30;
+  for (const ly of layers) add(0,"LAYER",2,ly,70,0,62,colors[ly] || (ci += 20) % 250 + 1,6,"CONTINUOUS");
+  add(0,"ENDTAB",0,"ENDSEC",0,"SECTION",2,"ENTITIES");
+  const th = o.th, d = th * 0.6;
+  for (const p of ok){
+    const z = o.flat || isNaN(p.z) ? 0 : p.z;
+    const ly = o.layerByCode ? clean(p.code || "NOCODE") : "TS_POINT";
+    add(0,"POINT",8,ly,10,p.e,20,p.n,30,z);
+    if (o.cross){
+      add(0,"LINE",8,ly,10,p.e-d,20,p.n,30,z,11,p.e+d,21,p.n,31,z);
+      add(0,"LINE",8,ly,10,p.e,20,p.n-d,30,z,11,p.e,21,p.n+d,31,z);
+    }
+    const tx = (layer, text, dy) => add(0,"TEXT",8,layer,10,p.e+th*0.8,20,p.n+dy,30,z,40,th,1,text);
+    if (o.id && p.id) tx("TS_ID", p.id, th*0.3);
+    if (o.elev && !isNaN(p.z)) tx("TS_ELEV", p.z.toFixed(o.dec), -th*1.1);
+    if (o.code && p.code) tx("TS_CODE", p.code, -th*2.5);
+  }
+  add(0,"ENDSEC",0,"EOF");
+  return { text: L.join("\r\n") + "\r\n", count: ok.length };
+}
+let cvPts = [], cvBase = "points";
+function cvUpdate(){
+  const { pts, bad } = parseCoordText($("#cvInput").value, $("#cvCols").value);
+  cvPts = pts;
+  $("#cvWarn").textContent = pts.length ? `อ่านได้ ${pts.length} จุด` + (bad.length ? ` · ข้ามบรรทัดที่อ่านไม่ได้: ${bad.slice(0,10).join(", ")}${bad.length > 10 ? "…" : ""}` : "") : ($("#cvInput").value.trim() ? "ไม่พบข้อมูลพิกัดที่อ่านได้ — เช็กลำดับคอลัมน์" : "");
+  const svg = $("#cvPrev"); if (!pts.length){ svg.innerHTML = ""; return; }
+  const es = pts.map(p => p.e), ns = pts.map(p => p.n);
+  const minE = Math.min(...es), maxE = Math.max(...es), minN = Math.min(...ns), maxN = Math.max(...ns);
+  const W = 600, H = 340, pad = 30, sc = Math.min((W-2*pad)/((maxE-minE)||1), (H-2*pad)/((maxN-minN)||1));
+  const ox = (W - (maxE-minE)*sc)/2, oy = (H - (maxN-minN)*sc)/2;
+  const showLbl = pts.length <= 200;
+  svg.innerHTML = pts.map(p => { const x = ox + (p.e-minE)*sc, y = H - (oy + (p.n-minN)*sc);
+    return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="var(--acc)"/>` + (showLbl ? `<text x="${(x+5).toFixed(1)}" y="${(y-5).toFixed(1)}" font-size="11" fill="var(--mute)">${esc(p.id)}</text>` : ""); }).join("");
+}
+["cvInput","cvCols"].forEach(id => $("#"+id).addEventListener("input", cvUpdate));
+$("#cvCols").addEventListener("change", cvUpdate);
+$("#cvFile").onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  const buf = new Uint8Array(await f.arrayBuffer());
+  let txt = new TextDecoder("utf-8").decode(buf); if (txt.includes("\uFFFD")) txt = new TextDecoder("windows-874").decode(buf);
+  $("#cvInput").value = txt.replace(/^\uFEFF/, ""); cvBase = f.name.replace(/\.[^.]+$/, ""); $("#cvName").textContent = f.name; e.target.value = ""; cvUpdate();
+};
+$("#cvDxf").onclick = () => {
+  cvUpdate(); if (!cvPts.length) return;
+  const r = dxfFromPoints(cvPts, { th: Math.max(0.01, +$("#cvTh").value || 0.25), flat: $("#cvZ").value === "flat", dec: +$("#cvDec").value,
+    id: $("#cvId").checked, elev: $("#cvElev").checked, code: $("#cvCode").checked, layerByCode: $("#cvLayer").checked, cross: $("#cvCross").checked });
+  download(cvBase + ".dxf", r.text, "application/dxf");
+  $("#cvWarn").textContent = `บันทึก ${cvBase}.dxf แล้ว (${r.count} จุด)`;
+};
+$("#cvToSend").onclick = () => {
+  $("#txInput").value = $("#cvInput").value; $("#txCols").value = $("#cvCols").value;
+  document.querySelector('nav button[data-tab="tx"]').click(); $("#btnBuild").click();
+};
+
 document.querySelectorAll("[data-exp]").forEach(b => b.addEventListener("click", () => {
   const k = b.dataset.exp, base = (lastParse.job || "JOB").replace(/[^\w-]+/g,"_") + "_" + stamp();
   if (!rxBuf) return log("ยังไม่มีข้อมูลให้บันทึก");
@@ -635,7 +742,7 @@ document.querySelectorAll("[data-exp]").forEach(b => b.addEventListener("click",
   if (!lastParse.pts.length && k !== "obs") return log("ไม่พบข้อมูลพิกัดในไฟล์นี้");
   if (k === "csv") return download(base + ".csv", "\uFEFFPoint,N,E,Z,Code\r\n" + lastParse.pts.map(p => [csvCell(p.id),f3(p.n),f3(p.e),f3(p.z),csvCell(p.code)].join(",")).join("\r\n"), "text/csv");
   if (k === "csvcad") return download(base + "_ENZ.csv", lastParse.pts.map(p => [csvCell(p.id),f3(p.e),f3(p.n),f3(p.z),csvCell(p.code)].join(",")).join("\r\n"), "text/csv");
-  if (k === "dxf") return download(base + ".dxf", makeDXF(lastParse.pts), "application/dxf");
+  if (k === "dxf") return download(base + ".dxf", dxfFromPoints(lastParse.pts, { th:0.25, flat:false, dec:3, id:true, elev:true, code:true, layerByCode:false, cross:true }).text, "application/dxf");
   if (k === "obs"){
     if (!lastParse.obs.length) return log("ไม่พบค่าวัดดิบในไฟล์นี้");
     return download(base + "_obs.csv", "\uFEFFFrom,To,SlopeDist,VAngle,HAngle,Code\r\n" + lastParse.obs.map(o => [csvCell(o.from),csvCell(o.to),f4(o.sd),f4(o.va),f4(o.ha),csvCell(o.code)].join(",")).join("\r\n"), "text/csv");
